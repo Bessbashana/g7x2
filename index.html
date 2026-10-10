@@ -1,0 +1,66 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Господин</title><script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{--bg:#14161a;--card:#1f2228;--tx:#eceff4;--mut:#8a93a3;--ac:#b3263e;--ok:#2e9e6b;--bl:#3b82f6}
+*{box-sizing:border-box}body{margin:0;padding:14px;background:var(--bg);color:var(--tx);font:16px system-ui,sans-serif}
+.card{background:var(--card);border-radius:14px;padding:14px;margin-bottom:12px}h3{margin:0 0 10px;font-size:15px;color:var(--mut);font-weight:600}
+.row{display:flex;gap:8px;flex-wrap:wrap}button{flex:1;padding:12px;border:0;border-radius:10px;background:#2b2f38;color:var(--tx);font-size:15px;cursor:pointer}
+button:active{background:var(--ac)}.red{background:var(--ac);width:100%}.green{background:var(--ok);width:100%}
+.big{font-size:28px;font-weight:700}.bar{height:10px;background:#2b2f38;border-radius:6px;overflow:hidden;margin-top:8px}.bar i{display:block;height:100%;background:var(--bl)}
+.chart{display:flex;align-items:flex-end;gap:6px;height:100px}.col{flex:1;text-align:center;font-size:10px;color:var(--mut)}.col b{display:block;background:var(--bl);border-radius:4px 4px 0 0;min-height:2px;margin-bottom:4px}
+.col.ok b{background:var(--ok)}
+.task{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px 0;border-top:1px solid #2b2f38}.task button{flex:0 0 auto;padding:8px 12px}
+.lvl button.on{background:var(--ac)}
+#paused{display:none;background:#5a1a26;padding:12px;border-radius:12px;margin-bottom:12px;text-align:center}
+.mut{color:var(--mut);font-size:13px}
+#err{display:none;padding:20px;text-align:center}
+</style></head><body>
+<div id="err"></div>
+<div id="app">
+<div id="paused">🔴 Игра на паузе</div>
+<div class="card"><h3>💧 Вода сегодня</h3><div class="big" id="w"></div><div class="bar"><i id="wb"></i></div>
+<div class="row" style="margin-top:10px"><button data-a="water" data-v="250">+250 мл</button><button data-a="water" data-v="500">+500 мл</button></div></div>
+<div class="card"><div class="row"><button data-a="toilet">🚽 Прошу в туалет</button><button data-a="meal">🍽 Поела</button></div>
+<p class="mut" style="margin:10px 0 0">Сегодня: туалет <span id="t"></span>, еда <span id="m"></span>, заданий выполнено <span id="k"></span></p></div>
+<div class="card"><h3>📋 Задания</h3><div id="tasks"></div></div>
+<div class="card"><h3>📊 Вода за 7 дней, мл</h3><div class="chart" id="ch"></div>
+<div class="row" style="margin-top:10px"><button data-a="charts">Подробные графики в чат</button></div></div>
+<div class="card lvl"><h3>Строгость</h3><div class="row" id="lv"><button data-a="level" data-v="1">1</button><button data-a="level" data-v="2">2</button><button data-a="level" data-v="3">3</button></div></div>
+<div class="card"><button class="red" id="r" data-a="red">🔴 СТОП-слово</button><button class="green" id="g" data-a="green" style="display:none">🟢 Возобновить</button></div>
+<p class="mut" id="upd" style="text-align:center"></p>
+</div>
+<script>
+const tg=window.Telegram&&Telegram.WebApp;const $=i=>document.getElementById(i);
+function fail(t){$('app').style.display='none';$('err').style.display='block';$('err').textContent=t}
+function esc(x){return String(x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function decode(){
+  const d=new URLSearchParams(location.search).get('d');if(!d)return null;
+  let b=d.replace(/-/g,'+').replace(/_/g,'/');while(b.length%4)b+='=';
+  const bytes=Uint8Array.from(atob(b),c=>c.charCodeAt(0));
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
+let s=null;try{s=decode()}catch(e){}
+if(tg){tg.ready();tg.expand();try{tg.setHeaderColor('#14161a');tg.setBackgroundColor('#14161a')}catch(e){}}
+if(!s){fail('Открой приложение кнопкой «📱 Открыть приложение» в чате с ботом.')}
+else{
+  const days=s.days,today=days[days.length-1][1];
+  $('w').textContent=today+' / '+s.min;$('wb').style.width=Math.min(100,today/s.min*100)+'%';
+  $('t').textContent=s.t;$('m').textContent=s.m;$('k').textContent=s.k;
+  $('paused').style.display=s.p?'block':'none';$('r').style.display=s.p?'none':'block';$('g').style.display=s.p?'block':'none';
+  const mx=Math.max(s.min,...days.map(d=>d[1]));
+  $('ch').innerHTML=days.map(d=>`<div class="col${d[1]>=s.min?' ok':''}"><b style="height:${Math.round(d[1]/mx*80)}px"></b>${esc(d[0])}</div>`).join('');
+  $('tasks').innerHTML=s.tasks.length?s.tasks.map(k=>`<div class="task"><span>#${k[0]}: ${esc(k[1])}</span><button data-a="done" data-v="${k[0]}">✅</button></div>`).join('')
+    :'<div class="row"><button data-a="tasks">Получить задание</button></div>';
+  document.querySelectorAll('#lv button').forEach(b=>b.classList.toggle('on',+b.dataset.v===s.lvl));
+  $('upd').textContent='Данные на '+new Date(s.ts*1000).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
+}
+document.addEventListener('click',e=>{
+  const b=e.target.closest('button[data-a]');if(!b)return;
+  const msg=JSON.stringify({a:b.dataset.a,v:b.dataset.v?+b.dataset.v:null});
+  if(!tg||!tg.initDataUnsafe||tg.platform==='unknown'){fail('Открой приложение из Telegram.');return}
+  try{tg.HapticFeedback&&tg.HapticFeedback.impactOccurred('light')}catch(e){}
+  tg.sendData(msg); // Telegram передаёт действие боту и закрывает окно; бот ответит в чате
+});
+</script></body></html>
